@@ -839,6 +839,175 @@ namespace Test
 			}
 		}
 		#endregion
+			
+		#region Purge Materials
+		public void purgeMaterials()
+		{
+			
+			Document doc = this.ActiveUIDocument.Document;
+			var app = doc.Application;
+			string matNames = String.Empty;
+			
+			var materials = new FilteredElementCollector(doc).OfClass(typeof(Material)).ToList();
+			
+			foreach (var material in materials) 
+			{
+				var materialName = material.Name;
+				if (materialName.Contains("Default")) {
+					matNames += materialName + Environment.NewLine;
+				}
+				
+				
+			}
+			
+			TaskDialog td = new TaskDialog("Info");
+			td.MainInstruction = "Materials in the project:";
+			td.MainContent = matNames;
+			td.Show();
+			
+		}
+		#endregion
+		
+		#region SOL1 Export schedule
+		public void SOL1ScheduleExport()
+		{
+			var doc = this.ActiveUIDocument.Document;
+			var app = doc.Application;
+			string scheduleNames = String.Empty;
+			
+			var folder_env = @"%USERPROFILE%\OneDrive - TTP AG\08_Testing\RTV-BAY_SOL1_Schedule_Export\Schedule Exports";
+			var folder_path = Environment.ExpandEnvironmentVariables(folder_env);
+			var _ext = ".txt";
+			var opt = new ViewScheduleExportOptions();
+			opt.HeadersFootersBlanks = false;
+			opt.Title = true;
+			
+			var toExport = new List<string>()
+			{
+				"BAY_AKZ-Check_List_Doors",
+				"BAY_AKZ-Check_List_General",
+				"BAY_AKZ-Check_List_Windows",
+				"BAY_Overview-Clean_Room_Classification",
+				"BAY_Room Schedule Detailed",
+				"SOL1_Raumbuch_DatenMaster",
+				"SOL1_Tuerliste_DatenMaster"
+			};
+			
+			var vsCol = new FilteredElementCollector(doc).OfClass(typeof(ViewSchedule));
+			
+			foreach (ViewSchedule vs in vsCol) {
+				if (toExport.Contains(vs.Name)) {
+					vs.Export(folder_path, vs.Name + _ext, opt);
+				}
+			}
+			
+//			var td = new TaskDialog("Info");
+//			td.MainInstruction = "View Schedule in project:";
+//			td.MainContent = scheduleNames;
+//			td.Show();
+		}
+		#endregion
+		
+		#region Reset Param values
+		public void resetParamValues()
+		{
+			UIDocument uidoc = this.ActiveUIDocument;
+			Document doc = uidoc.Document;
+			
+			
+			Selection sel = uidoc.Selection;
+			var spacFilter = new JtElementsOfClassSelectionFilter<Space>();
+			Reference spaRefer = sel.PickObject(ObjectType.Element,spacFilter, "Select the space");
+			
+			var elem = doc.GetElement(spaRefer) as Element;
+			
+			var parameter = elem.LookupParameter("SP_Space_Temperature");
+			var check = false;
+			
+			using(Transaction t = new Transaction(doc, "Clear the parameter Values"))
+			{
+				t.Start();
+				check = parameter.ClearValue();
+				t.Commit();
+			}
+			
+			TaskDialog.Show("The result", check.ToString() + " " + parameter.AsString());
+		}
+		#endregion
+		
+		#region Export Parameters to csv
+		public void SOL1ParameterCheck()
+		{
+			Document doc = this.ActiveUIDocument.Document;
+			var sb = new StringBuilder();
+			var userName = doc.Application.Username.ToString();
+			var docName = doc.Title.ToString().Replace(userName, "");
+			
+			var catList = new List<BuiltInCategory>
+			{
+				BuiltInCategory.OST_DuctTerminal,// DuctTerminal is Air Terminal in Revit
+				BuiltInCategory.OST_CableTray,
+				BuiltInCategory.OST_DataDevices,
+				BuiltInCategory.OST_Doors,
+				BuiltInCategory.OST_DuctAccessory,
+				BuiltInCategory.OST_DuctFitting,
+				BuiltInCategory.OST_DuctSystem,
+				BuiltInCategory.OST_ElectricalEquipment,
+				BuiltInCategory.OST_ElectricalFixtures,
+				BuiltInCategory.OST_FireAlarmDevices,
+				BuiltInCategory.OST_Furniture,
+				BuiltInCategory.OST_LightingDevices,
+				BuiltInCategory.OST_LightingFixtures,
+				BuiltInCategory.OST_MechanicalEquipment,
+				BuiltInCategory.OST_NurseCallDevices,
+				BuiltInCategory.OST_PipeAccessory,
+				BuiltInCategory.OST_PlumbingFixtures,
+				BuiltInCategory.OST_Rooms,
+				BuiltInCategory.OST_SecurityDevices,
+				BuiltInCategory.OST_Sheets,
+				BuiltInCategory.OST_SpecialityEquipment,
+				BuiltInCategory.OST_Sprinklers,
+				BuiltInCategory.OST_TelephoneDevices,
+				BuiltInCategory.OST_Walls,
+				BuiltInCategory.OST_Windows
+			};
+			
+			var headers = new List<string>{"Document Name", "Element ID", "Element Name", "Element Category"};
+			var BayParamList = new List<string>{
+				"BAY_industrial_complex",
+				"BAY_technical_equipment",
+				"BAY_process_plant",
+				"BAY_plant_section",
+				"BAY_industrial_unit"
+			};
+			headers.AddRange(BayParamList);
+			sb.AppendLine(string.Join(",", headers));
+			
+			var multiFilter = new ElementMulticategoryFilter(catList);			
+			var fec = new FilteredElementCollector(doc).WherePasses(multiFilter).WhereElementIsNotElementType();
+			
+			foreach (var element in fec) {
+				var elemInfo = new List<string>
+				{
+					docName,
+					element.Id.ToString(), 
+					element.Name.ToString(), 
+					element.Category.Name.ToString()
+				};
+				
+				var paramsIncluded = BayParamList.Select(x => element.LookupParameter(x) == null ? "Not present" : "Present").ToList();
+				
+				elemInfo.AddRange(paramsIncluded);
+				sb.AppendLine(string.Join(",", elemInfo));
+			}
+			
+			//var exportCsv = File(new UTF8Encoding().GetBytes(sb.ToString()), "text/csv", "export.csv");			
+			var filePath = Environment.GetFolderPath(Environment.SpecialFolder.Desktop) + @"\Test\" + string.Format("{0}.csv", docName);
+			File.WriteAllText(filePath, sb.ToString(), new UTF8Encoding());
+			
+			TaskDialog.Show("Test",sb.ToString());
+		}
+		#endregion
 		
 	}
 
